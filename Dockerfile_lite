@@ -12,13 +12,27 @@ WORKDIR /ragflow
 
 # Copy models downloaded via download_deps.py
 RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
-COPY build/huggingface.co/InfiniFlow/text_concat_xgb_v1.0/* /ragflow/rag/res/deepdoc/
-COPY build/huggingface.co/InfiniFlow/deepdoc/* /ragflow/rag/res/deepdoc/
-COPY build/huggingface.co/InfiniFlow/huqie/* /ragflow/rag/res/
-COPY build/nltk_data  /root/
-COPY build/tika-server-standard-3.0.0.jar /ragflow/
-COPY build/tika-server-standard-3.0.0.jar.md5 /ragflow/
-COPY build/cl100k_base.tiktoken /ragflow/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/huggingface.co,target=/huggingface.co \
+    cp /huggingface.co/InfiniFlow/huqie/huqie.txt.trie /ragflow/rag/res/ && \
+    tar --exclude='.*' -cf - \
+        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
+        /huggingface.co/InfiniFlow/deepdoc \
+        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc \
+
+#RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/huggingface.co,target=/huggingface.co \
+#    if [ "$LIGHTEN" != "1" ]; then \
+#        (tar -cf - \
+#            /huggingface.co/BAAI/bge-large-zh-v1.5 \
+#            /huggingface.co/maidalun1020/bce-embedding-base_v1 \
+#            | tar -xf - --strip-components=2 -C /root/.ragflow) \
+#    fi
+
+# https://github.com/chrismattmann/tika-python
+# This is the only way to run python-tika without internet access. Without this set, the default is to check the tika version and pull latest every time from Apache.
+RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
+    cp -r /deps/nltk_data /root/ && \
+    cp /deps/tika-server-standard-3.0.0.jar /deps/tika-server-standard-3.0.0.jar.md5 /ragflow/ && \
+    cp /deps/cl100k_base.tiktoken /ragflow/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
 
 ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard-3.0.0.jar"
 ENV DEBIAN_FRONTEND=noninteractive
@@ -63,6 +77,23 @@ RUN if [ "$NEED_MIRROR" == "1" ]; then \
 
 ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENV PATH=/root/.local/bin:$PATH
+
+# Add msssql ODBC driver
+# macOS ARM64 environment, install msodbcsql18.
+# general x86_64 environment, install msodbcsql17.
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt update && \
+    arch="$(uname -m)"; \
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+        # ARM64 (macOS/Apple Silicon or Linux aarch64)
+        ACCEPT_EULA=Y apt install -y unixodbc-dev msodbcsql18; \
+    else \
+        # x86_64 or others
+        ACCEPT_EULA=Y apt install -y unixodbc-dev msodbcsql17; \
+    fi || \
+    { echo "Failed to install ODBC driver"; exit 1; }
 
 # Add dependencies of selenium
 RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chrome-linux64-121-0-6167-85,target=/chrome-linux64.zip \
