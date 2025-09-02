@@ -118,10 +118,8 @@ function get_image_tags {
   fi
 }
 
-
-
 # prompt user
-read -p "========= Build Sentry-Guard Platform ======== \
+read -p "========= Build Web ======== \
  Do you want to continue (y/n)?  " answer
 case ${answer:0:1} in
   y|Y )
@@ -131,6 +129,22 @@ case ${answer:0:1} in
 
     # build web
     build_web
+
+  ;;
+
+  * )
+    echo "Bye..."
+    # exit 1;
+  ;;
+
+esac
+
+
+# prompt user
+read -p "========= Build Images ======== \
+ Do you want to continue (y/n)?  " answer
+case ${answer:0:1} in
+  y|Y )
 
     # build docker image
     build_images
@@ -145,7 +159,7 @@ esac
 
 
 # prompt user
-read -p "========= Push Sentry-Guard Platform ======== \
+read -p "========= Push Images ======== \
  Do you want to continue (y/n)?  " answer
 case ${answer:0:1} in
   y|Y )
