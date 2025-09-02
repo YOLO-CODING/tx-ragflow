@@ -524,7 +524,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     chunks = settings.retrievaler.chunk_list(task["doc_id"], task["tenant_id"], [str(task["kb_id"])], fields=["content_with_weight", vctr_nm])
     if len(chunks) == 0:
         return [], 0
-    logging.info("run_x_qa, task_id: " + task["id"])
+    logging.info("run_x_qa, task_id: " + task["id"] + ", numberOfChunks: " + str(len(chunks)))
     pendings = []
     async def chunk_question_complete(chat_mdl, q, d, lang, pendings):
         cached = get_llm_cache(chat_mdl.llm_name, d["content_with_weight"], "x_qa", {"q": q})
@@ -583,11 +583,13 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     for d in chunks:
         question_kwd = d.get("question_kwd", [])
         if len(question_kwd) == 0:
+            logging.warning("x_qa: no question_kwd for chunk - " + d["id"] + ", skipping")
             continue
 
         async with trio.open_nursery() as nursery:
             for question in question_kwd:
                 if question == "":
+                    logging.warning("x_qa: empty question_kwd for chunk - " + d["id"] + ", skipping")
                     continue
                 nursery.start_soon(chunk_question_complete, chat_model, "q", d, task_language, pendings)
 
@@ -605,6 +607,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     now = trio.current_time()
     if callback:
         callback(
+            prog=0.99,
             msg=f"set_xqa added {len(pendings)} qa-objects  in {now - start:.2f}s.")
 
 @timeout(60*60*2, 1)
