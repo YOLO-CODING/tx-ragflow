@@ -568,7 +568,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
                 "important_tks": d["important_tks"],
                 "question_kwd": [q],
                 "question_tks": rag_tokenizer.tokenize(q),
-                "content_with_weight": json.dumps(qa_obj),
+                "content_with_weight": json.dumps(qa_obj, ensure_ascii=False),
                 "content_ltks": rag_tokenizer.tokenize(ans),
                 "content_sm_ltks": rag_tokenizer.fine_grained_tokenize(ans),
                 "source_id": d["id"],
