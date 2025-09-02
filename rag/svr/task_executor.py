@@ -521,7 +521,19 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     vctr_nm = "q_%d_vec" % vector_size
     tenant_id = task["tenant_id"]
     kb_id = task["kb_id"]
-    chunks = settings.retrievaler.chunk_list(task["doc_id"], task["tenant_id"], [str(task["kb_id"])], fields=["content_with_weight", vctr_nm])
+    chunks = settings.retrievaler.chunk_list(task["doc_id"], task["tenant_id"], [str(task["kb_id"])], fields=[
+        "id",
+        "content_with_weight",
+        "question_kwd",
+        "img_id",
+        "docnm_kwd",
+        "title_tks",
+        "title_sm_tks",
+        "name_kwd",
+        "important_kwd",
+        "tag_kwd",
+        "important_tks",
+        vctr_nm])
     if len(chunks) == 0:
         return [], 0
     logging.info("run_x_qa, task_id: " + task["id"] + ", numberOfChunks: " + str(len(chunks)))
@@ -542,7 +554,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
 
             nt = {
                 "id": get_uuid(),
-                "kb_id": d["kb_id"],
+                "kb_id": kb_id,
                 "create_time": str(datetime.now()).replace("T", " "),
                 "create_timestamp_flt": datetime.now().timestamp(),
                 "img_id": d["img_id"],
@@ -559,7 +571,6 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
                 "content_ltks": rag_tokenizer.tokenize(ans),
                 "content_sm_ltks": rag_tokenizer.fine_grained_tokenize(ans),
                 "source_id": d["id"],
-                "weight_int": int(d["weight"]),
                 "knowledge_graph_kwd": "xqa",           # 自定义类型
             }
             txt = f"Q:{q}, A: {ans}"
