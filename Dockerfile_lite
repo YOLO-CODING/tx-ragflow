@@ -137,8 +137,8 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 ENV PYTHONPATH=/ragflow/
 
-RUN mkdir -p /ragflow/web/dist
-COPY web/dist/* web/dist/
+RUN mkdir -p /ragflow/web
+COPY web/dist web/dist
 COPY api api
 COPY conf conf
 COPY deepdoc deepdoc
