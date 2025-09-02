@@ -679,7 +679,8 @@ async def do_handle_task(task):
         start_ts = timer()
         chat_model = LLMBundle(task_tenant_id, LLMType.CHAT, llm_name=task_llm_id, lang=task_language)
 
-        run_x_qa(task, task_language, chat_model, embedding_model, vector_size, progress_callback)
+        async with kg_limiter:
+            await run_x_qa(task, task_language, chat_model, embedding_model, vector_size, progress_callback)
 
         progress_callback(prog=1.0, msg="Knowledge X_QA done ({:.2f}s)".format(timer() - start_ts))
         return
