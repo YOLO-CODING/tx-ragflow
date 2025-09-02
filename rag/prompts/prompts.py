@@ -200,12 +200,12 @@ def question_proposal(chat_mdl, content, topn=3):
     return kwd
 
 
-def question_complete(chat_mdl, question, content, languages=None):
+def question_complete(chat_mdl, query, content, language="中文"):
     sys_template = PROMPT_JINJA_ENV.from_string(QA_SYS_PROMPT)
-    sys_rendered_prompt = sys_template.render(content=content, languages=languages)
+    sys_rendered_prompt = sys_template.render(knowledge_content=content)
     user_template = PROMPT_JINJA_ENV.from_string(QA_USER_PROMPT)
-    user_rendered_prompt = user_template.render(query=question, languages=languages)
-
+    user_rendered_prompt = user_template.render(query=query, language=language)
+    logging.info("question_complete called: %s-->%s", query, content)
     msg = [{"role": "user", "content": user_rendered_prompt}]
     ans = chat_mdl.chat(sys_rendered_prompt, msg, {"temperature": 0.5})
     ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)

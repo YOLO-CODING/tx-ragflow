@@ -618,7 +618,6 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     now = trio.current_time()
     if callback:
         callback(
-            prog=0.99,
             msg=f"set_xqa added {len(pendings)} qa-objects  in {now - start:.2f}s.")
 
 @timeout(60*60*2, 1)

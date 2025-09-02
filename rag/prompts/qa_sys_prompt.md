@@ -6,9 +6,10 @@ Requirements and restriction:
   - Answer with markdown format text.
   - Answer in language of user's question.
   - DO NOT make things up, especially for numbers.
+  - Text generated MUST be in the same language as the original user's question.
 
 ### Information from knowledge bases
 
-{{ knowledge }}
+{{ knowledge_content }}
 
 The above is information from knowledge bases.
