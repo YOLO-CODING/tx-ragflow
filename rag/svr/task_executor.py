@@ -546,6 +546,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
                     lambda: question_complete(chat_mdl, q, d["content_with_weight"], lang))
             set_llm_cache(chat_mdl.llm_name, d["content_with_weight"], cached, "x_qa", {"q": q})
         if cached:
+            logging.info("set_xqa: answer=" + cached)
             ans = cached
             qa_obj = {
                 "question": q,
@@ -588,7 +589,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
             pendings.append(nt)
 
             if callback:
-                callback("set_xqa, query:" + q)
+                callback(msg="set_xqa, query:" + q)
 
     start = trio.current_time()
     for d in chunks:
@@ -602,7 +603,7 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
                 if question == "":
                     logging.warning("x_qa: empty question_kwd for chunk - " + d["id"] + ", skipping")
                     continue
-                nursery.start_soon(chunk_question_complete, chat_model, "q", d, task_language, pendings)
+                nursery.start_soon(chunk_question_complete, chat_model, question, d, task_language, pendings)
 
     # store pendings to vectorstore
     vs_bulk_size = 4
