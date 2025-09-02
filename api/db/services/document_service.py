@@ -608,6 +608,7 @@ class DocumentService(CommonService):
                 bad = 0
                 has_raptor = False
                 has_graphrag = False
+                has_x_qa = False
                 e, doc = DocumentService.get_by_id(d["id"])
                 status = doc.run  # TaskStatus.RUNNING.value
                 priority = 0
@@ -623,6 +624,8 @@ class DocumentService(CommonService):
                         has_raptor = True
                     elif t.task_type == "graphrag":
                         has_graphrag = True
+                    elif t.task_type == "x_qa":      # customized type for Q&A
+                        has_x_qa = True
                     priority = max(priority, t.priority)
                 prg /= len(tsks)
                 if finished and bad:
@@ -634,6 +637,9 @@ class DocumentService(CommonService):
                         prg = 0.98 * len(tsks) / (len(tsks) + 1)
                     elif (d["parser_config"].get("graphrag") or {}).get("use_graphrag") and not has_graphrag:
                         queue_raptor_o_graphrag_tasks(d, "graphrag", priority)
+                        prg = 0.98 * len(tsks) / (len(tsks) + 1)
+                    elif d["parser_config"].get("auto_questions", False) and not has_x_qa:
+                        queue_x_qa_tasks(d, priority);
                         prg = 0.98 * len(tsks) / (len(tsks) + 1)
                     else:
                         status = TaskStatus.DONE.value
@@ -699,6 +705,31 @@ def queue_raptor_o_graphrag_tasks(doc, ty, priority):
     bulk_insert_into_db(Task, [task], True)
     assert REDIS_CONN.queue_product(get_svr_queue_name(priority), message=task), "Can't access Redis. Please check the Redis' status."
 
+def queue_x_qa_tasks(doc, priority):
+    chunking_config = DocumentService.get_chunking_config(doc["id"])
+    hasher = xxhash.xxh64()
+    for field in sorted(chunking_config.keys()):
+        hasher.update(str(chunking_config[field]).encode("utf-8"))
+
+    def new_task():
+        nonlocal doc
+        return {
+            "id": get_uuid(),
+            "doc_id": doc["id"],
+            "from_page": 100000000,
+            "to_page": 100000000,
+            "task_type": 'x_qa',
+            "progress_msg": datetime.now().strftime("%H:%M:%S") + " created task x_qa"
+        }
+
+    task = new_task()
+    for field in ["doc_id", "from_page", "to_page"]:
+        hasher.update(str(task.get(field, "")).encode("utf-8"))
+    hasher.update("_qa".encode("utf-8"))
+    task["digest"] = hasher.hexdigest()
+    bulk_insert_into_db(Task, [task], True)
+    assert REDIS_CONN.queue_product(get_svr_queue_name(priority),
+                                    message=task), "Can't access Redis. Please check the Redis' status."
 
 def get_queue_length(priority):
     group_info = REDIS_CONN.queue_info(get_svr_queue_name(priority), SVR_CONSUMER_GROUP_NAME)

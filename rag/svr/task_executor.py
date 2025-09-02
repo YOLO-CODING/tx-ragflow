@@ -21,11 +21,13 @@ import sys
 import threading
 import time
 
+from api.utils import get_uuid
 from api.utils.api_utils import timeout
 from api.utils.log_utils import init_root_logger, get_project_base_directory
 from graphrag.general.index import run_graphrag
-from graphrag.utils import get_llm_cache, set_llm_cache, get_tags_from_cache, set_tags_to_cache
-from rag.prompts import keyword_extraction, question_proposal, content_tagging
+from graphrag.utils import get_llm_cache, set_llm_cache, get_tags_from_cache, set_tags_to_cache, get_embed_cache, \
+    set_embed_cache
+from rag.prompts import keyword_extraction, question_proposal, content_tagging, question_complete
 
 import logging
 import os
@@ -514,6 +516,96 @@ async def run_raptor(row, chat_mdl, embd_mdl, vector_size, callback=None):
         tk_count += num_tokens_from_string(content)
     return res, tk_count
 
+async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callback=None):
+    enable_timeout_assertion = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
+    vctr_nm = "q_%d_vec" % vector_size
+    tenant_id = task["tenant_id"]
+    kb_id = task["kb_id"]
+    chunks = settings.retrievaler.chunk_list(task["doc_id"], task["tenant_id"], [str(task["kb_id"])], fields=["content_with_weight", vctr_nm])
+    if len(chunks) == 0:
+        return [], 0
+    logging.info("run_x_qa, task_id: " + task["id"])
+    pendings = []
+    async def chunk_question_complete(chat_mdl, q, d, lang, pendings):
+        cached = get_llm_cache(chat_mdl.llm_name, d["content_with_weight"], "x_qa", {"q": q})
+        if not cached:
+            async with chat_limiter:
+                cached = await trio.to_thread.run_sync(
+                    lambda: question_complete(chat_mdl, q, d["content_with_weight"], lang))
+            set_llm_cache(chat_mdl.llm_name, d["content_with_weight"], cached, "x_qa", {"q": q})
+        if cached:
+            ans = cached
+            qa_obj = {
+                "question": q,
+                "answer": ans,
+            }
+
+            nt = {
+                "id": get_uuid(),
+                "kb_id": d["kb_id"],
+                "create_time": str(datetime.now()).replace("T", " "),
+                "create_timestamp_flt": datetime.now().timestamp(),
+                "img_id": d["img_id"],
+                "docnm_kwd": d["docnm_kwd"],
+                "title_tks": d["title_tks"],
+                "title_sm_tks": d["title_sm_tks"],
+                "name_kwd": d["name_kwd"],
+                "important_kwd": d["important_kwd"],
+                "tag_kwd": d["tag_kwd"],
+                "important_tks": d["important_tks"],
+                "question_kwd": [q],
+                "question_tks": rag_tokenizer.tokenize(q),
+                "content_with_weight": json.dumps(qa_obj),
+                "content_ltks": rag_tokenizer.tokenize(ans),
+                "content_sm_ltks": rag_tokenizer.fine_grained_tokenize(ans),
+                "source_id": d["id"],
+                "weight_int": int(d["weight"]),
+                "knowledge_graph_kwd": "xqa",           # 自定义类型
+            }
+            txt = f"Q:{q}, A: {ans}"
+            logging.info("run xqa => " + txt)
+            ebd = get_embed_cache(embd_mdl.llm_name, txt)
+            if ebd is None:
+                async with chat_limiter:
+                    with trio.fail_after(3 if enable_timeout_assertion else 300000000):
+                        ebd, _ = await trio.to_thread.run_sync(
+                            lambda: embd_mdl.encode([txt]))
+                ebd = ebd[0]
+                set_embed_cache(embd_mdl.llm_name, txt, ebd)
+            assert ebd is not None
+            nt["q_%d_vec" % len(ebd)] = ebd
+            pendings.append(nt)
+
+            if callback:
+                callback("set_xqa, query:" + q)
+
+    start = trio.current_time()
+    for d in chunks:
+        question_kwd = d.get("question_kwd", [])
+        if len(question_kwd) == 0:
+            continue
+
+        async with trio.open_nursery() as nursery:
+            for question in question_kwd:
+                if question == "":
+                    continue
+                nursery.start_soon(chunk_question_complete, chat_model, "q", d, task_language, pendings)
+
+    # store pendings to vectorstore
+    vs_bulk_size = 4
+    for b in range(0, len(pendings), vs_bulk_size):
+        with trio.fail_after(3 if enable_timeout_assertion else 30000000):
+            doc_store_result = await trio.to_thread.run_sync(
+                lambda: settings.docStoreConn.insert(pendings[b: b + vs_bulk_size], search.index_name(tenant_id), kb_id))
+        if b % 100 == vs_bulk_size and callback:
+            callback(msg=f"Insert chunks: {b}/{len(chunks)}")
+        if doc_store_result:
+            error_message = f"Insert chunk error: {doc_store_result}, please check log file and Elasticsearch/Infinity status!"
+            raise Exception(error_message)
+    now = trio.current_time()
+    if callback:
+        callback(
+            msg=f"set_xqa added {len(pendings)} qa-objects  in {now - start:.2f}s.")
 
 @timeout(60*60*2, 1)
 async def do_handle_task(task):
@@ -578,6 +670,18 @@ async def do_handle_task(task):
         async with kg_limiter:
             await run_graphrag(task, task_language, with_resolution, with_community, chat_model, embedding_model, progress_callback)
         progress_callback(prog=1.0, msg="Knowledge Graph done ({:.2f}s)".format(timer() - start_ts))
+        return
+    # X_QA process
+    elif task.get("task_type", "") == "x_qa":
+        if not task_parser_config.get("auto_questions", False):
+            progress_callback(prog=-1.0, msg="Internal configuration error.")
+            return
+        start_ts = timer()
+        chat_model = LLMBundle(task_tenant_id, LLMType.CHAT, llm_name=task_llm_id, lang=task_language)
+
+        run_x_qa(task, task_language, chat_model, embedding_model, vector_size, progress_callback)
+
+        progress_callback(prog=1.0, msg="Knowledge X_QA done ({:.2f}s)".format(timer() - start_ts))
         return
     else:
         # Standard chunking methods

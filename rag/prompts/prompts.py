@@ -153,6 +153,9 @@ SUMMARY4MEMORY = load_prompt("summary4memory")
 RANK_MEMORY = load_prompt("rank_memory")
 META_FILTER = load_prompt("meta_filter")
 ASK_SUMMARY = load_prompt("ask_summary")
+QA_SYS_PROMPT = load_prompt("qa_sys_prompt")    # customized by Yolo
+QA_USER_PROMPT = load_prompt("qa_user_prompt")
+
 
 PROMPT_JINJA_ENV = jinja2.Environment(autoescape=False, trim_blocks=True, lstrip_blocks=True)
 
@@ -195,6 +198,18 @@ def question_proposal(chat_mdl, content, topn=3):
     if kwd.find("**ERROR**") >= 0:
         return ""
     return kwd
+
+
+def question_complete(chat_mdl, question, content, languages=None):
+    sys_template = PROMPT_JINJA_ENV.from_string(QA_SYS_PROMPT)
+    sys_rendered_prompt = sys_template.render(content=content, languages=languages)
+    user_template = PROMPT_JINJA_ENV.from_string(QA_USER_PROMPT)
+    user_rendered_prompt = user_template.render(query=question, languages=languages)
+
+    msg = [{"role": "user", "content": user_rendered_prompt}]
+    ans = chat_mdl.chat(sys_rendered_prompt, msg, {"temperature": 0.5})
+    ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)
+    return ans if ans.find("**ERROR**") < 0 else "出错了"
 
 
 def full_question(tenant_id=None, llm_id=None, messages=[], language=None, chat_mdl=None):
