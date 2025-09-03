@@ -14,6 +14,7 @@
 #  limitations under the License.
 #
 import json
+import logging
 
 from flask import request
 from flask_login import login_required, current_user
@@ -379,3 +380,88 @@ def get_meta():
                 code=settings.RetCode.AUTHENTICATION_ERROR
             )
     return get_json_result(data=DocumentService.get_meta_by_kbs(kb_ids))
+
+
+@manager.route('/<kb_id>/knowledge_xqa_list', methods=['POST'])  # noqa: F821
+@login_required
+def knowledge_xqa_list(kb_id):
+    if not KnowledgebaseService.accessible(kb_id, current_user.id):
+        return get_json_result(
+            data=False,
+            message='No authorization.',
+            code=settings.RetCode.AUTHENTICATION_ERROR
+        )
+
+    try:
+        _, kb = KnowledgebaseService.get_by_id(kb_id)
+
+        req = request.json
+        page = int(req.get("page", 1))
+        size = int(req.get("size", 30))
+        question = req.get("keywords", "")
+        req = {
+            "kb_id": [kb_id],
+            "page": page,
+            "size": size,
+            "question": question,
+            "sort": True,
+            "knowledge_graph_kwd": ["graph"]
+        }
+
+        obj = {"total": 0, "items": []}
+        if not settings.docStoreConn.indexExist(search.index_name(kb.tenant_id), kb_id):
+            return get_json_result(data=obj)
+        sres = settings.retrievaler.search(req, search.index_name(kb.tenant_id), [kb_id])
+
+        if not len(sres.ids):
+            return get_json_result(data=obj)
+
+        obj["total"] = sres.total
+        for id in sres.ids:
+            qa_dict = {}
+            from_dict = {}
+            try:
+                qa_dict = json.loads(sres.field[id]["content_with_weight"])
+                from_entity_kwd = sres.field[id].get("from_entity_kwd")
+                if from_entity_kwd is not None:
+                    from_dict = json.loads(from_entity_kwd)
+
+                d = {
+                    "qa_id": id,
+                    "question": sres.field[id].get("question_kwd", qa_dict["question"]),
+                    "answer": qa_dict["answer"],
+                    "source_id": sres.field[id]["source_id"],
+                    "from_entity": from_dict,
+                    "docnm_kwd": sres.field[id]["docnm_kwd"],
+                    "important_kwd": sres.field[id].get("important_kwd", []),
+                    "image_id": sres.field[id].get("image_id", ""),
+                    "create_time": sres.field[id].get("create_time"),
+                    "create_timestamp_flt": sres.field[id].get("create_timestamp_flt"),
+                    "kb_id": kb_id,
+                }
+
+                obj["items"].append(d)
+            except Exception as e:
+                logging.error("Error to parse qa_item, msg=" + str(e))
+                continue
+        return get_json_result(data=obj)
+    except Exception as e:
+        if str(e).find("not_found") > 0:
+            return get_json_result(data=False, message='No qa_item found!',
+                                   code=settings.RetCode.DATA_ERROR)
+        return server_error_response(e)
+
+
+@manager.route('/<kb_id>/knowledge_xqa_list', methods=['DELETE'])  # noqa: F821
+@login_required
+def delete_knowledge_xqa_list(kb_id):
+    if not KnowledgebaseService.accessible(kb_id, current_user.id):
+        return get_json_result(
+            data=False,
+            message='No authorization.',
+            code=settings.RetCode.AUTHENTICATION_ERROR
+        )
+    _, kb = KnowledgebaseService.get_by_id(kb_id)
+    settings.docStoreConn.delete({"knowledge_graph_kwd": ["xqa"]}, search.index_name(kb.tenant_id), kb_id)
+
+    return get_json_result(data=True)
