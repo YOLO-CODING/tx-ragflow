@@ -382,9 +382,10 @@ def get_meta():
     return get_json_result(data=DocumentService.get_meta_by_kbs(kb_ids))
 
 
-@manager.route('/<kb_id>/knowledge_xqa_list', methods=['POST'])  # noqa: F821
+@manager.route('/knowledge_xqa_list', methods=['POST'])  # noqa: F821
 @login_required
-def knowledge_xqa_list(kb_id):
+def knowledge_xqa_list():
+    kb_id = request.args.get("kb_id")
     if not KnowledgebaseService.accessible(kb_id, current_user.id):
         return get_json_result(
             data=False,
@@ -405,7 +406,23 @@ def knowledge_xqa_list(kb_id):
             "size": size,
             "question": question,
             "sort": True,
-            "knowledge_graph_kwd": ["graph"]
+            "knowledge_graph_kwd": ["xqa"],
+            "fields": [
+                "id",
+                "source_id",
+                "from_entity_kwd",
+                "docnm_kwd",
+                "kb_id",
+                "img_id",
+                "important_kwd",
+                "knowledge_graph_kwd",
+                "question_kwd",
+                "doc_type_kwd",
+                "available_int",
+                "content_with_weight",
+                "create_time",
+                "create_timestamp_flt"
+            ]
         }
 
         obj = {"total": 0, "items": []}
@@ -420,21 +437,26 @@ def knowledge_xqa_list(kb_id):
         for id in sres.ids:
             qa_dict = {}
             from_dict = {}
+            source_id = None
             try:
                 qa_dict = json.loads(sres.field[id]["content_with_weight"])
                 from_entity_kwd = sres.field[id].get("from_entity_kwd")
-                if from_entity_kwd is not None:
-                    from_dict = json.loads(from_entity_kwd)
+                if from_entity_kwd is not None and len(from_entity_kwd) > 0:
+                    from_dict = json.loads(from_entity_kwd[0])
+                source_ids = sres.field[id].get("source_id")
+                if source_ids is not None and len(source_ids) > 0:
+                    source_id = source_ids[0]
 
                 d = {
                     "qa_id": id,
-                    "question": sres.field[id].get("question_kwd", qa_dict["question"]),
+                    "question": qa_dict["question"],
                     "answer": qa_dict["answer"],
-                    "source_id": sres.field[id]["source_id"],
+                    "question_kwd": sres.field[id]["question_kwd"],
+                    "source_id": source_id,
                     "from_entity": from_dict,
                     "docnm_kwd": sres.field[id]["docnm_kwd"],
                     "important_kwd": sres.field[id].get("important_kwd", []),
-                    "image_id": sres.field[id].get("image_id", ""),
+                    "img_id": sres.field[id].get("img_id", ""),
                     "create_time": sres.field[id].get("create_time"),
                     "create_timestamp_flt": sres.field[id].get("create_timestamp_flt"),
                     "kb_id": kb_id,

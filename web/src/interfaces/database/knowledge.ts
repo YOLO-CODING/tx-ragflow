@@ -158,3 +158,18 @@ export interface IKnowledgeGraph {
   graph: Record<string, any>;
   mind_map: TreeData;
 }
+
+export interface IKnowledgeXqa {
+  qa_id: string;
+  kb_id: string;
+  source_id: string;
+  from_entity: any;
+  docnm_kwd: string;
+  question: string;
+  question_kwd: any[];
+  answer: string;
+  important_kwd: any[];
+  img_id: string;
+  create_time?: string;
+  create_timestamp_flt?: number;
+}

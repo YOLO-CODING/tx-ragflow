@@ -4,12 +4,19 @@ import { useSecondPathName } from '@/hooks/route-hook';
 import {
   useFetchKnowledgeBaseConfiguration,
   useFetchKnowledgeGraph,
+  useFetchKnowledgeXqaList,
 } from '@/hooks/use-knowledge-request';
 import { cn, formatBytes } from '@/lib/utils';
 import { Routes } from '@/routes';
 import { formatPureDate } from '@/utils/date';
 import { isEmpty } from 'lodash';
-import { Banknote, Database, FileSearch2, GitGraph } from 'lucide-react';
+import {
+  Banknote,
+  Database,
+  FileSearch2,
+  GitGraph,
+  ListChecks,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHandleMenuClick } from './hooks';
@@ -24,6 +31,7 @@ export function SideBar({ refreshCount }: PropType) {
   // refreshCount: be for avatar img sync update on top left
   const { data } = useFetchKnowledgeBaseConfiguration(refreshCount);
   const { data: routerData } = useFetchKnowledgeGraph();
+  const { data: routerData2 } = useFetchKnowledgeXqaList();
   const { t } = useTranslation();
 
   const items = useMemo(() => {
@@ -51,8 +59,15 @@ export function SideBar({ refreshCount }: PropType) {
         key: Routes.KnowledgeGraph,
       });
     }
+    if (!isEmpty(routerData2?.items)) {
+      list.push({
+        icon: ListChecks,
+        label: t(`knowledgeDetails.knowledgeXqa`),
+        key: Routes.KnowledgeXqaList,
+      });
+    }
     return list;
-  }, [t, routerData]);
+  }, [t, routerData, routerData2]);
 
   return (
     <aside className="relative p-5 space-y-8">

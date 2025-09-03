@@ -205,4 +205,17 @@ export const listDocument = (
 export const documentFilter = (kb_id: string) =>
   request.post(api.get_dataset_filter, { kb_id });
 
+// 获取知识库问答List
+export function listKnowledgeXqa(
+  params?: IFetchKnowledgeListRequestParams,
+  body?: IFetchDocumentListRequestBody,
+) {
+  return request.post(api.getKnowledgeXqaList, { data: body || {}, params });
+}
+
+// 删除知识库问答（全部）
+export function removeAllKnowledgeXqa(knowledgeId: string) {
+  return request.delete(api.getKnowledgeXqaList(knowledgeId));
+}
+
 export default kbService;

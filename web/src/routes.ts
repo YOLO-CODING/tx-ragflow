@@ -38,6 +38,7 @@ export enum Routes {
   Result = '/result',
   ResultView = `${Chunk}${Result}`,
   KnowledgeGraph = '/knowledge-graph',
+  KnowledgeXqaList = '/knowledge-xqa-list',
   AgentLogPage = '/agent-log-page',
   AgentShare = '/agent/share',
   ChatShare = `${Chats}/share`,
@@ -270,6 +271,10 @@ const routes = [
       {
         path: `${Routes.DatasetBase}${Routes.KnowledgeGraph}/:id`,
         component: `@/pages${Routes.DatasetBase}${Routes.KnowledgeGraph}`,
+      },
+      {
+        path: `${Routes.DatasetBase}${Routes.KnowledgeXqaList}/:id`,
+        component: `@/pages${Routes.DatasetBase}${Routes.KnowledgeXqaList}`,
       },
     ],
   },

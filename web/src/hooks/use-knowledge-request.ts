@@ -11,6 +11,7 @@ import i18n from '@/locales/config';
 import kbService, {
   getKnowledgeGraph,
   listDataset,
+  listKnowledgeXqa,
 } from '@/services/knowledge-service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDebounce } from 'ahooks';
@@ -30,6 +31,7 @@ export const enum KnowledgeApiAction {
   FetchKnowledgeDetail = 'fetchKnowledgeDetail',
   FetchKnowledgeGraph = 'fetchKnowledgeGraph',
   FetchMetadata = 'fetchMetadata',
+  FetchKnowledgeXqaList = 'fetchKnowledgeXqaList',
 }
 
 export const useKnowledgeBaseId = (): string => {
@@ -292,5 +294,36 @@ export function useFetchKnowledgeMetadata(kbIds: string[] = []) {
     },
   });
 
+  return { data, loading };
+}
+
+export function useFetchKnowledgeXqaList() {
+  const { knowledgeId } = useKnowledgeBaseId();
+  const { searchString, handleInputChange } = useHandleSearchChange();
+  const { pagination, setPagination } = useGetPaginationWithRouter();
+  const { id } = useParams();
+  const debouncedSearchString = useDebounce(searchString, { wait: 500 });
+
+  const { data, isFetching: loading } = useQuery<{
+    items: IKnowledgeXqa[];
+    total: number;
+  }>({
+    queryKey: [
+      KnowledgeApiAction.FetchKnowledgeXqaList,
+      debouncedSearchString,
+      pagination,
+    ],
+    initialData: { items: [], total: 0 },
+    enabled: !!knowledgeId || !!id,
+    queryFn: async () => {
+      const { data } = await listKnowledgeXqa({
+        kb_id: knowledgeId || id,
+        keywords: debouncedSearchString,
+        page_size: pagination.pageSize,
+        page: pagination.current,
+      });
+      return data?.data ?? {};
+    },
+  });
   return { data, loading };
 }
