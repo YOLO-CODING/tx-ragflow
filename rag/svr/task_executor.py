@@ -521,8 +521,17 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
     vctr_nm = "q_%d_vec" % vector_size
     tenant_id = task["tenant_id"]
     kb_id = task["kb_id"]
+    doc_id = task["doc_id"]
+
+    # delete old xqa records
+    await trio.to_thread.run_sync(settings.docStoreConn.delete,
+                                  {"knowledge_graph_kwd": "xqa", "source_id": doc_id},
+                                  search.index_name(tenant_id), kb_id)
+
+    # query chunks
     chunks = settings.retrievaler.chunk_list(task["doc_id"], task["tenant_id"], [str(task["kb_id"])], fields=[
         "id",
+        "doc_id",
         "content_with_weight",
         "question_kwd",
         "img_id",
@@ -571,7 +580,8 @@ async def run_x_qa(task, task_language, chat_model, embd_mdl, vector_size, callb
                 "content_with_weight": json.dumps(qa_obj, ensure_ascii=False),
                 "content_ltks": rag_tokenizer.tokenize(ans),
                 "content_sm_ltks": rag_tokenizer.fine_grained_tokenize(ans),
-                "source_id": d["id"],
+                "source_id": d["doc_id"],               # 来源文档
+                "from_entity_kwd": json.dumps({"chunk_id": d["id"]}, ensure_ascii=False),             # 来源块
                 "knowledge_graph_kwd": "xqa",           # 自定义类型
             }
             txt = f"Q:{q}, A: {ans}"
