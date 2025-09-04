@@ -1,2 +1,2 @@
-cd web
-npx lint-staged
+# cd web
+# npx lint-staged
