@@ -89,7 +89,7 @@ export default function SearchingView({
             setIsSearching?.(false);
           }}
         >
-          RAGFlow
+          AI&RAG Flow
         </h1>
 
         <div
